@@ -49,7 +49,7 @@ def main():
     # ------------------------------------------------------------------ #
     backbone = VQConditionEncoder(
         conditioning_channels=3,
-        image_finetune=False,
+        image_finetune=True,
         num_conds=2,
         use_vq=False,
     ).to(device).eval()
@@ -64,7 +64,7 @@ def main():
     # ------------------------------------------------------------------ #
     # 2. Fresh VQ model (random init) with correct in_channels
     # ------------------------------------------------------------------ #
-    in_ch = backbone.backbone_channels[-1] * backbone.num_conds  # 256*2=512
+    in_ch = 256 * 2  # backbone_channels[-1] * num_conds = 512
     vq = VQModel(
         in_channels=in_ch,
         quantizer_channels=vq_cfg["quantizer_channels"],
