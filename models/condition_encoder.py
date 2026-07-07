@@ -1,3 +1,4 @@
+import math
 from typing import Optional, Tuple
 
 import torch
@@ -314,11 +315,23 @@ class VQModel(nn.Module):
         else:
             if self.vq_type == "FSQ":
                 z_q, indices = self.quantizer(x)
-                # Entropy regularisation: penalise low per-dimension std in the
-                # pre-quantisation space.  With bound(z)=tanh(z)*2 a std ~1 puts
-                # mass across ~3-4 of the 5 grid points; std << 1 collapses to 1.
-                std_per_dim = x.float().std(dim=(0, 1))          # (codebook_dim,)
-                embedding_loss = torch.relu(1.0 - std_per_dim).mean()
+                # Soft entropy regularisation: maximise per-dimension marginal
+                # entropy via differentiable RBF soft-assignments to FSQ grid
+                # points.  Gradient flows z_bounded → x → downsample_encoder.
+                z_bounded = self.quantizer.bound(x.float())  # (bf, n, d)
+                half_width = (self.quantizer._levels - 1) // 2  # e.g. [2,2,2,2]
+                n_dims = z_bounded.shape[-1]
+                total_entropy = torch.zeros(1, device=x.device, dtype=torch.float32).squeeze()
+                for d in range(n_dims):
+                    hw = half_width[d].item()
+                    centers = torch.arange(-hw, hw + 1, device=x.device, dtype=torch.float32)
+                    z_d = z_bounded[..., d].reshape(-1, 1)         # (N, 1)
+                    soft = torch.softmax(-((z_d - centers) ** 2) / 0.5, dim=-1)  # (N, L)
+                    avg = soft.mean(dim=0)                          # (L,) marginal
+                    total_entropy = total_entropy + -(avg * torch.log(avg + 1e-10)).sum()
+                max_entropy = n_dims * math.log(self.quantizer._levels[0].item())
+                # loss in [0, 1]: 0 = perfect uniform distribution, 1 = one code
+                embedding_loss = 1.0 - total_entropy / max_entropy
             else:
                 z_q, indices, embedding_loss = self.quantizer(x)
         z_q = rearrange(z_q, "b (h w) c -> b c h w", h=h, w=w)
