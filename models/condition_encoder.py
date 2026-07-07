@@ -1,4 +1,3 @@
-import math
 from typing import Optional, Tuple
 
 import torch
@@ -297,6 +296,13 @@ class VQModel(nn.Module):
                 levels=fsq_levels,
                 dim=quantizer_channels,
             )
+            # Fixed normaliser: forces per-position features to mean=0, std≈1
+            # so the FSQ grid is well-covered instead of collapsing to the
+            # centre code. elementwise_affine=False → no learnable scale/shift
+            # that could undo the normalisation.
+            self.pre_quant_norm = torch.nn.LayerNorm(
+                quantizer_channels, elementwise_affine=False
+            )
         self.upsample_decoder = Decoder(
             z_channels=quantizer_channels,
             in_channels=in_channels,
@@ -314,24 +320,9 @@ class VQModel(nn.Module):
             embedding_loss = torch.tensor([0.0], device=x.device)
         else:
             if self.vq_type == "FSQ":
+                x = self.pre_quant_norm(x.float()).to(x.dtype)
                 z_q, indices = self.quantizer(x)
-                # Soft entropy regularisation: maximise per-dimension marginal
-                # entropy via differentiable RBF soft-assignments to FSQ grid
-                # points.  Gradient flows z_bounded → x → downsample_encoder.
-                z_bounded = self.quantizer.bound(x.float())  # (bf, n, d)
-                half_width = (self.quantizer._levels - 1) // 2  # e.g. [2,2,2,2]
-                n_dims = z_bounded.shape[-1]
-                total_entropy = torch.zeros(1, device=x.device, dtype=torch.float32).squeeze()
-                for d in range(n_dims):
-                    hw = half_width[d].item()
-                    centers = torch.arange(-hw, hw + 1, device=x.device, dtype=torch.float32)
-                    z_d = z_bounded[..., d].reshape(-1, 1)         # (N, 1)
-                    soft = torch.softmax(-((z_d - centers) ** 2) / 0.5, dim=-1)  # (N, L)
-                    avg = soft.mean(dim=0)                          # (L,) marginal
-                    total_entropy = total_entropy + -(avg * torch.log(avg + 1e-10)).sum()
-                max_entropy = n_dims * math.log(self.quantizer._levels[0].item())
-                # loss in [0, 1]: 0 = perfect uniform distribution, 1 = one code
-                embedding_loss = 1.0 - total_entropy / max_entropy
+                embedding_loss = torch.tensor([0.0], device=x.device)
             else:
                 z_q, indices, embedding_loss = self.quantizer(x)
         z_q = rearrange(z_q, "b (h w) c -> b c h w", h=h, w=w)
@@ -359,10 +350,10 @@ class VQModel(nn.Module):
             return x
         x = rearrange(x, "bf c h w -> bf (h w) c")
         if self.vq_type == "FSQ":
+            x = self.pre_quant_norm(x.float()).to(x.dtype)
             z_q, indices = self.quantizer(x)
-            embedding_loss = torch.tensor([0.0], device=x.device)
         else:
-            z_q, indices, embedding_loss = self.quantizer(x)
+            z_q, indices, _ = self.quantizer(x)
         return indices
 
     def decode(self, z):
