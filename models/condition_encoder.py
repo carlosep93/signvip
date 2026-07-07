@@ -296,13 +296,6 @@ class VQModel(nn.Module):
                 levels=fsq_levels,
                 dim=quantizer_channels,
             )
-            # Fixed normaliser: forces per-position features to mean=0, std≈1
-            # so the FSQ grid is well-covered instead of collapsing to the
-            # centre code. elementwise_affine=False → no learnable scale/shift
-            # that could undo the normalisation.
-            self.pre_quant_norm = torch.nn.LayerNorm(
-                quantizer_channels, elementwise_affine=False
-            )
         self.upsample_decoder = Decoder(
             z_channels=quantizer_channels,
             in_channels=in_channels,
@@ -320,7 +313,6 @@ class VQModel(nn.Module):
             embedding_loss = torch.tensor([0.0], device=x.device)
         else:
             if self.vq_type == "FSQ":
-                x = self.pre_quant_norm(x.float()).to(x.dtype)
                 z_q, indices = self.quantizer(x)
                 embedding_loss = torch.tensor([0.0], device=x.device)
             else:
@@ -350,7 +342,6 @@ class VQModel(nn.Module):
             return x
         x = rearrange(x, "bf c h w -> bf (h w) c")
         if self.vq_type == "FSQ":
-            x = self.pre_quant_norm(x.float()).to(x.dtype)
             z_q, indices = self.quantizer(x)
         else:
             z_q, indices, _ = self.quantizer(x)
