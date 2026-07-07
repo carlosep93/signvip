@@ -667,7 +667,7 @@ def main():
 
                 distill_loss = func.mse_loss(sk_cond.float(), origin_cond.float())
 
-                total_loss = cfg.distill_loss_weight * distill_loss + vq_loss
+                total_loss = cfg.distill_loss_weight * distill_loss + cfg.entropy_loss_weight * vq_loss
 
                 avg_loss = accelerator.gather(
                     total_loss.repeat(cfg.dataloader.batch_size)

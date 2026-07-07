@@ -10,7 +10,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 enc = VQConditionEncoder(
     conditioning_channels=3,
-    image_finetune=True,   # no motion modules â frame-by-frame is enough
+    image_finetune=True,   # no motion modules — frame-by-frame is enough
     num_conds=2,
     use_vq=False,          # backbone only, no quantizer
 )

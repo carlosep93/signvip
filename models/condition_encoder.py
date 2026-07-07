@@ -314,7 +314,11 @@ class VQModel(nn.Module):
         else:
             if self.vq_type == "FSQ":
                 z_q, indices = self.quantizer(x)
-                embedding_loss = torch.tensor([0.0], device=x.device)
+                # Entropy regularisation: penalise low per-dimension std in the
+                # pre-quantisation space.  With bound(z)=tanh(z)*2 a std ~1 puts
+                # mass across ~3-4 of the 5 grid points; std << 1 collapses to 1.
+                std_per_dim = x.float().std(dim=(0, 1))          # (codebook_dim,)
+                embedding_loss = torch.relu(1.0 - std_per_dim).mean()
             else:
                 z_q, indices, embedding_loss = self.quantizer(x)
         z_q = rearrange(z_q, "b (h w) c -> b c h w", h=h, w=w)
