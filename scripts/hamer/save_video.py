@@ -6,7 +6,7 @@ import random
 from multiprocessing import Manager
 from pathlib import Path
 
-os.environ["PYOPENGL_PLATFORM"] = "osmesa"
+os.environ["PYOPENGL_PLATFORM"] = "egl"
 
 import cv2
 import numpy as np
@@ -21,7 +21,8 @@ import os
 from typing import Dict, Optional
 
 
-def process_video(video_path, pose_path, renderer, output_path, queue):
+def process_video(video_path, pose_path, faces, output_path, queue):
+    renderer = Renderer(5000, 256, faces=faces)
     try:
         # Quick file existence check without opening video
         if os.path.exists(output_path):
@@ -59,47 +60,54 @@ def process_video(video_path, pose_path, renderer, output_path, queue):
         scaled_focal_length = 10000.0 * (new_res / original_res)
 
         out_video = cv2.VideoWriter(output_path, fourcc, fps, (210, 260))
-        for frame_idx in range(total_frames):
-            if frame_idx in video_keypoints.keys():
-                result = video_keypoints[frame_idx]
-                all_verts = []
-                all_cam_t = []
-                all_right = []
+        try:
+            for frame_idx in range(total_frames):
+                if frame_idx in video_keypoints.keys():
+                    result = video_keypoints[frame_idx]
+                    all_verts = []
+                    all_cam_t = []
+                    all_right = []
 
-                for verts, cam_t, is_right in result:
-                    all_verts.append(verts)
-                    all_cam_t.append(cam_t)
-                    all_right.append(is_right)
+                    for verts, cam_t, is_right in result:
+                        all_verts.append(verts)
+                        all_cam_t.append(cam_t)
+                        all_right.append(is_right)
 
-                # Render front view
-                if len(all_verts) > 0:
-                    misc_args = dict(
-                        mesh_base_color=LIGHT_BLUE,
-                        scene_bg_color=(0, 0, 0),
-                        focal_length=scaled_focal_length,
-                    )
-                    cam_view = renderer.render_rgba_multiple(
-                        all_verts,
-                        cam_t=all_cam_t,
-                        render_res=[210, 260],
-                        is_right=all_right,
-                        **misc_args,
-                    )
+                    # Render front view
+                    if len(all_verts) > 0:
+                        misc_args = dict(
+                            mesh_base_color=LIGHT_BLUE,
+                            scene_bg_color=(0, 0, 0),
+                            focal_length=scaled_focal_length,
+                        )
+                        cam_view = renderer.render_rgba_multiple(
+                            all_verts,
+                            cam_t=all_cam_t,
+                            render_res=[210, 260],
+                            is_right=all_right,
+                            **misc_args,
+                        )
 
-                    input_img_overlay = 255 * cam_view[:, :, :3][:, :, ::-1]
+                        input_img_overlay = 255 * cam_view[:, :, :3][:, :, ::-1]
+                    else:
+                        # all black
+                        input_img_overlay = np.zeros((260, 210, 3))
                 else:
-                    # all black
                     input_img_overlay = np.zeros((260, 210, 3))
-            else:
-                input_img_overlay = np.zeros((260, 210, 3))
-            input_img_overlay = input_img_overlay.astype(np.uint8)
-            out_video.write(input_img_overlay)
-
-        out_video.release()
-        cap.release()
+                input_img_overlay = input_img_overlay.astype(np.uint8)
+                out_video.write(input_img_overlay)
+        finally:
+            out_video.release()
+            cap.release()
 
     except Exception as e:
-        print(f"Error processing {video_path}: {str(e)}")
+        import traceback
+        print(f"Error processing {video_path}: {str(e)}\n{traceback.format_exc()}")
+        try:
+            if os.path.exists(output_path):
+                os.remove(output_path)
+        except OSError:
+            pass
     finally:
         # Always send a signal, even if there's an error
         queue.put(1)
@@ -119,12 +127,14 @@ def main():
     parser.add_argument(
         "--video_folder", type=str, required=True, help="Folder with input videos"
     )
+    parser.add_argument(
+        "--faces_path", type=str, required=True, help="Path to faces.npz (MANO mesh faces)"
+    )
     args = parser.parse_args()
 
     scaled_focal_length = 10000.0
-    data = np.load("/deepo_data/hamer/faces.npz")
+    data = np.load(args.faces_path)
     faces = data["arr_0"]
-    renderer = Renderer(5000, 256, faces=faces)
 
     # Make output directory if it does not exist
     os.makedirs(args.out_folder, exist_ok=True)
@@ -152,7 +162,7 @@ def main():
                     args.pose_folder,
                     video_file.replace(".mp4", ".pkl"),
                 ),
-                renderer,
+                faces,
                 os.path.join(args.out_folder, video_file),
                 queue,
             )

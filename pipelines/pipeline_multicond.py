@@ -595,8 +595,9 @@ class SignViPPipeline(DiffusionPipeline):
                         hamer_cond_input = rearrange(
                             hamer_cond_input, "b c f h w -> (b f) c h w"
                         )
+                        cond_dtype = next(condition_encoder.parameters()).dtype
                         sk_features = condition_encoder(
-                            sk_cond_input, hamer_cond_input, video_length=f
+                            sk_cond_input.to(cond_dtype), hamer_cond_input.to(cond_dtype), video_length=f
                         )
                     sk_features = [
                         rearrange(feature, "(b f) c h w -> b c f h w", b=batch_size)

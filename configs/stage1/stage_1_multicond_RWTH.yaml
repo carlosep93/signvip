@@ -3,12 +3,12 @@ weight_dtype: fp16
 stage_init: True
 
 modules:
-  vae: "./pretrain_models/sd-vae-ft-mse"
-  unet_2d: ./pretrain_models/stable-diffusion-v1-5/unet
-  scheduler: "./pretrain_models/stable-diffusion-v1-5/scheduler/"
-  apperance_encoder: ./pretrain_models/stable-diffusion-v1-5/unet
+  vae: "/home/usuaris/veu/cescola/signvip/models/stable_difusion/sd-vae-ft-mse"
+  unet_2d: "/home/usuaris/veu/cescola/signvip/models/stable_difusion/stable-diffusion-v1-5/unet"
+  scheduler: "/home/usuaris/veu/cescola/signvip/models/stable_difusion/stable-diffusion-v1-5/scheduler/"
+  apperance_encoder: "/home/usuaris/veu/cescola/signvip/models/stable_difusion/stable-diffusion-v1-5/unet"
   condition_encoder: 
-  empty_text_emb: "./pretrain_models/empty_text_emb.pt"
+  empty_text_emb: "/home/usuaris/veu/cescola/signvip/models/empty_text_emb.pt"
   unet:
   unet_additional_kwargs:
     unet_use_cross_frame_attention: false
@@ -26,7 +26,7 @@ gradient_checkpointing: False
 
 solver:
   max_train_steps: 30000
-  gradient_accumulation_steps: 1
+  gradient_accumulation_steps: 16
   max_grad_norm: 1.0
   optimizer:
     use_8bit_adam: False
@@ -44,13 +44,13 @@ dataset:
   frame_scale: [ 1.0, 1.0 ]
   frame_ratio: [ 0.9, 1.0 ]
   roots:
-    - "/deepo_data/signvipworkspace/datasets/RWTH-T"
+    - "/home/usuaris/veussd/carlos.escolano/phoenix/PHOENIX-2014-T-release-v3/PHOENIX-2014-T"
   sk_roots:
-    - "/deepo_data/signvipworkspace/datasets/RWTH-TSK"
+    - "/home/usuaris/veussd/carlos.escolano/phoenix/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/train_processed_videos/sk"
   hamer_roots:
-    - "/deepo_data/signvipworkspace/datasets/RWTH-TSmplerx"
+    - "/home/usuaris/veussd/carlos.escolano/phoenix/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/train_processed_videos/hamer_rendered"
   meta_paths:
-    - "/deepo_data/signvipworkspace/datasets/RWTH-T/train_processed_videos.json"
+    - "/home/usuaris/veussd/carlos.escolano/phoenix/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/train_processed_videos.json"
   sample_rate: 2
   num_frames: 4
   ref_margin: 5
@@ -63,8 +63,8 @@ dataset:
   both_mask_ratio: 0
 
 dataloader:
-  batch_size: 32
-  num_workers: 8
+  batch_size: 4
+  num_workers: 2
 
 noise_scheduler_kwargs:
   num_train_timesteps: 1000
@@ -90,7 +90,7 @@ max_sin_pe_len: 1000
 
 validation_data:
   meta_paths:
-    - "/deepo_data/signvipworkspace/datasets/RWTH-T/dev_processed_videos.json"
+    - "/home/usuaris/veussd/carlos.escolano/phoenix/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/train_processed_videos.json"
   prompt: ""
   num_inference_steps: 20
   guidance_scale: 3.5

@@ -24,7 +24,7 @@ from typing import Dict, Optional
 from dwpose.preprocess import DWposeDetector, get_video_pose_unscale_keypoints
 from vitpose_model import ViTPoseModel
 
-os.environ["PYOPENGL_PLATFORM"] = "osmesa"
+os.environ["PYOPENGL_PLATFORM"] = "egl"
 
 # dwprocessor = DWposeDetector(
 #     model_det="models/DWPose/yolox_l.onnx",

@@ -5,12 +5,13 @@ deepspeed_config:
   offload_param_device: none
   zero3_init_flag: false
   zero_stage: 2
+  fp16:
+    enabled: true
+    initial_scale_power: 8
 distributed_type: DEEPSPEED
 downcast_bf16: false
-dynamo_config:
-  dynamo_backend: INDUCTOR
+dynamo_config: {}
 enable_cpu_affinity: false
-machine_rank: 0
 machine_rank: 0
 main_training_function: main
 mixed_precision: 'fp16'

@@ -188,7 +188,7 @@ class SignTextDataset(Dataset):
 
             if self.sk_videos_info:
                 sk_vid_info = dict(self.sk_videos_info[index])
-                sk_vid_path = os.path.join(sk_vid_info["root"], sk_vid_info["video"])
+                sk_vid_path = os.path.join(sk_vid_info["root"], os.path.basename(sk_vid_info["video"]))
                 sk_vid_path = sk_vid_path.replace(".mp4", ".pkl")
                 try:
                     with open(sk_vid_path, "rb") as f:
@@ -203,11 +203,11 @@ class SignTextDataset(Dataset):
             if self.hamer_videos_info:
                 hamer_vid_info = dict(self.hamer_videos_info[index])
                 hamer_vid_path = os.path.join(
-                    hamer_vid_info["root"], hamer_vid_info["video"]
+                    hamer_vid_info["root"], os.path.basename(hamer_vid_info["video"])
                 )
-                hamer_vid_path = hamer_vid_path.replace(
-                    "train_processed_videos", "train_processed_videos2"
-                )
+                #hamer_vid_path = hamer_vid_path.replace(
+                #    "train_processed_videos", "train_processed_videos2"
+                #)
                 try:
                     hamer_vid_capture = cv2.VideoCapture(hamer_vid_path)
                     hamer_vid_len = int(hamer_vid_capture.get(cv2.CAP_PROP_FRAME_COUNT))

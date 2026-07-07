@@ -557,7 +557,8 @@ class SignViPStaticPipeline(DiffusionPipeline):
 
         sk_image = rearrange(sk_image, "b c f h w -> (b f) c h w")
         hamer_image = rearrange(hamer_image, "b c f h w -> (b f) c h w")
-        sk_features = self.condition_encoder(sk_image, hamer_image)
+        cond_dtype = next(self.condition_encoder.parameters()).dtype
+        sk_features = self.condition_encoder(sk_image.to(cond_dtype), hamer_image.to(cond_dtype))
         sk_features = [
             rearrange(feature, "(b f) c h w -> b c f h w", b=batch_size)
             for feature in sk_features

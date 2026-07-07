@@ -8,7 +8,7 @@ import torch
 import trimesh
 from PIL import Image
 
-os.environ["PYOPENGL_PLATFORM"] = "osmesa"
+os.environ["PYOPENGL_PLATFORM"] = "egl"
 LIGHT_BLUE = (0.65098039, 0.74117647, 0.85882353)
 
 

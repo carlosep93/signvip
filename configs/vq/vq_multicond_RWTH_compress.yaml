@@ -4,16 +4,18 @@ stage_init: True
 distill_loss_weight: 1
 
 modules:
-  vae: ./pretrain_models/sd-vae-ft-mse
-  unet_2d: ./pretrain_models/stable-diffusion-v1-5/unet/
-  text_encoder: ./pretrain_models/stable-diffusion-v1-5/text_encoder/
-  tokenizer: ./pretrain_models/stable-diffusion-v1-5/tokenizer/
-  scheduler: ./pretrain_models/stable-diffusion-v1-5/scheduler/
-  apperance_encoder: ./workspace/stage_1_multicond_RWTH/xx/best/appearance_encoder
-  condition_encoder: ./workspace/stage_1_multicond_RWTH/xx/best/condition_encoder/model.bin
-  condition_encoder_motion: ./workspace/stage_2_RWTH/xx/best/condition_encoder/model.bin
+  vae: "/home/usuaris/veu/cescola/signvip/models/stable_difusion/sd-vae-ft-mse"
+  unet_2d: "/home/usuaris/veu/cescola/signvip/models/stable_difusion/stable-diffusion-v1-5/unet"
+  text_encoder: "/home/usuaris/veu/cescola/signvip/models/stable_difusion/stable-diffusion-v1-5/text_encoder/"
+  tokenizer: "/home/usuaris/veu/cescola/signvip/models/stable_difusion/stable-diffusion-v1-5/tokenizer/"
+
+  scheduler: "/home/usuaris/veu/cescola/signvip/models/stable_difusion/stable-diffusion-v1-5/scheduler/"
+  apperance_encoder: "./workspace/stage_1_multicond_RWTH/best/appearance_encoder"
+  condition_encoder: "./workspace/stage_1_multicond_RWTH/best/condition_encoder/model.bin"
+  empty_text_emb: "/home/usuaris/veu/cescola/signvip/models/empty_text_emb.pt"
+  condition_encoder_motion: "/home/usuaris/veu/cescola/signvip/workspace/stage_2_RWTH/20260706-1043/best/condition_encoder/model.bin"
   vq_model: 
-  mm: ./workspace/stage_2_RWTH/xx/best/unet/model.bin
+  mm: "/home/usuaris/veu/cescola/signvip/workspace/stage_2_RWTH/20260706-1043/best/unet/model.bin"
   unet: 
   condition_encoder_kwargs:
     use_vq: true
@@ -84,13 +86,13 @@ dataset:
   frame_scale: [ 1.0, 1.0 ]
   frame_ratio: [ 0.9, 1.0 ]
   roots:
-    - "/deepo_data/signvipworkspace/datasets/RWTH-T"
+    - "/home/usuaris/veussd/carlos.escolano/phoenix/PHOENIX-2014-T-release-v3/PHOENIX-2014-T"
   sk_roots:
-    - "/deepo_data/signvipworkspace/datasets/RWTH-TSK"
+    - "/home/usuaris/veussd/carlos.escolano/phoenix/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/train_processed_videos/sk"
   hamer_roots:
-    - "/deepo_data/signvipworkspace/datasets/RWTH-TSmplerx"
+    - "/home/usuaris/veussd/carlos.escolano/phoenix/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/train_processed_videos/hamer_rendered"
   meta_paths:
-    - "/deepo_data/signvipworkspace/datasets/RWTH-T/train_processed_videos.json"
+    - "/home/usuaris/veussd/carlos.escolano/phoenix/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/train_processed_videos.json"
   sample_rate: 2
   num_frames: 4
   ref_margin: 1
@@ -128,7 +130,7 @@ max_visible_frames: 6
 
 validation_data:
   meta_paths:
-    - "/deepo_data/signvipworkspace/datasets/RWTH-T/dev_processed_videos.json"
+    - "/home/usuaris/veussd/carlos.escolano/phoenix/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/train_processed_videos.json"
   prompt: ""
   num_inference_steps: 20
   guidance_scale: 3.5

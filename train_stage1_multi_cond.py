@@ -435,6 +435,16 @@ def main():
         model.unet.enable_gradient_checkpointing()
         model.appearance_encoder.enable_gradient_checkpointing()
 
+    from diffusers.models.attention import Attention as DiffAttn
+    from diffusers.models.attention_processor import XFormersAttnProcessor
+    _xformers_count = 0
+    for module in list(model.unet.modules()) + list(model.appearance_encoder.modules()):
+        if isinstance(module, DiffAttn):
+            module.set_processor(XFormersAttnProcessor())
+            _xformers_count += 1
+    logger.info(f"xformers attention enabled on {_xformers_count} Attention modules.")
+
+
     if cfg.solver.optimizer.use_8bit_adam:
         try:
             import bitsandbytes as bnb
@@ -574,6 +584,7 @@ def main():
     accelerator.wait_for_everyone()
 
     best_ssim = float("-inf")
+    '''
     # ssim = best_ssim
     ssim = log_valid(
         cfg,
@@ -587,6 +598,8 @@ def main():
         global_step,
         workspace_dir + "/log",
     )
+    '''
+    ssim = best_ssim  # skip initial validation to keep training graph clean
 
     if accelerator.is_main_process and ssim > best_ssim:
         best_ssim = ssim
@@ -743,6 +756,7 @@ def main():
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.zero_grad()
+                model.reference_control_writer.clear() 
 
             if accelerator.sync_gradients:
                 model.reference_control_reader.clear()

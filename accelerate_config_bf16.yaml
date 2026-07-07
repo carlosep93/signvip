@@ -6,9 +6,8 @@ deepspeed_config:
   zero3_init_flag: false
   zero_stage: 2
 distributed_type: DEEPSPEED
-downcast_bf16: true
-dynamo_config:
-  dynamo_backend: INDUCTOR
+downcast_bf16: false
+dynamo_config: {}
 enable_cpu_affinity: false
 machine_rank: 0
 machine_rank: 0
