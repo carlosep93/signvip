@@ -38,8 +38,8 @@ def parse_args():
     p.add_argument("--config", required=True)
     p.add_argument("--n_steps", type=int, default=2000,
                    help="Number of variance-maximisation steps")
-    p.add_argument("--lr", type=float, default=1e-3,
-                   help="Learning rate (higher than Phase 2 is fine)")
+    p.add_argument("--lr", type=float, default=2e-4,
+                   help="Learning rate for spread phase")
     p.add_argument("--batch_size", type=int, default=None,
                    help="Override config batch size")
     p.add_argument("--device", type=str, default="cuda")
@@ -146,9 +146,18 @@ def main():
             vq.train()
             enc_out = vq.downsample_encoder(feat)  # (BF, 4, h', w')
 
-            # Variance maximisation: push features away from collapsed centre
-            # -var encourages the encoder to spread its output across the FSQ grid
-            spread_loss = -enc_out.var()
+            # Per-channel variance of FSQ-bounded values across all tokens.
+            # Using global var() allowed the encoder to satisfy the objective via
+            # constant per-channel biases (e.g. ch0→+20, ch1→-20 regardless of
+            # input), which maximises cross-channel variance while all tokens
+            # collapse to the same code. var(dim=0) instead measures variance
+            # ACROSS different input tokens for each FSQ dimension, so the encoder
+            # must produce different codes for different inputs.
+            # bound() = tanh(z)*2.002 keeps values in (-2.002, 2.002), which
+            # auto-attenuates gradients when outputs saturate (prevents runaway).
+            enc_flat = enc_out.permute(0, 2, 3, 1).reshape(-1, 4).float()  # (N, 4)
+            z_b = vq.quantizer.bound(enc_flat)        # (N, 4), in (-2.002, 2.002)
+            spread_loss = -z_b.var(dim=0).mean()      # per-FSQ-dim variance
 
             optimizer.zero_grad()
             spread_loss.backward()
@@ -165,11 +174,13 @@ def main():
                     idx = vq.encode(feat)
                     codes_used = idx.reshape(-1).unique().numel()
 
-                std_val = enc_out.detach().std().item()
-                pbar.set_postfix(
-                    loss=f"{spread_loss.item():.4f}",
-                    std=f"{std_val:.4f}",
-                    codes=f"{codes_used}/{n_e}",
+                dim_stds = z_b.detach().std(dim=0).tolist()
+                avg_zb_std = sum(dim_stds) / 4
+                tqdm.write(
+                    f"[step {step:5d}]  loss={spread_loss.item():.4f}"
+                    f"  zb_std={avg_zb_std:.3f}"
+                    f"  per_dim=[{', '.join(f'{s:.3f}' for s in dim_stds)}]"
+                    f"  codes={codes_used}/{n_e}"
                 )
 
     pbar.close()
