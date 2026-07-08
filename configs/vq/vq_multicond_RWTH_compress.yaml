@@ -1,7 +1,7 @@
 seed: 42
 weight_dtype: fp32
 stage_init: True
-distill_loss_weight: 1
+distill_loss_weight: 0.1
 entropy_loss_weight: 0.5
 
 modules:
@@ -118,7 +118,7 @@ noise_scheduler_kwargs:
   clip_sample: false
 
 resume_from_checkpoint: 
-checkpointing_steps: 1000
+checkpointing_steps: 200
 valid_steps: 200
 max_ckpt: 1
 max_model: 1
