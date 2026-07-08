@@ -15,7 +15,7 @@ modules:
   condition_encoder: "./workspace/stage_1_multicond_RWTH/best/condition_encoder/model.bin"
   empty_text_emb: "/home/usuaris/veu/cescola/signvip/models/empty_text_emb.pt"
   condition_encoder_motion: "/home/usuaris/veu/cescola/signvip/workspace/stage_2_RWTH/20260706-1043/best/condition_encoder/model.bin"
-  vq_model: 
+  vq_model: "workspace/vq_phase1_20260708-1014/encoder.bin" 
   mm: "/home/usuaris/veu/cescola/signvip/workspace/stage_2_RWTH/20260706-1043/best/unet/model.bin"
   unet: 
   condition_encoder_kwargs:
@@ -119,7 +119,7 @@ noise_scheduler_kwargs:
 
 resume_from_checkpoint: 
 checkpointing_steps: 1000
-valid_steps: 1000
+valid_steps: 200
 max_ckpt: 1
 max_model: 1
 

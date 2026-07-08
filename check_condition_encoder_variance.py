@@ -16,7 +16,7 @@ enc = VQConditionEncoder(
 )
 
 # load Stage 1 backbone weights
-model='workspace/vq_multicond_RWTH_compress/20260707-0936/best/condition_encoder/model.bin'
+model='workspace/vq_multicond_RWTH_compress/20260707-1748/best/condition_encoder/model.bin'
 state = torch.load(model, map_location="cpu")
 missing, unexpected = enc.load_state_dict(state, strict=False)
 print(f"missing: {len(missing)}  unexpected: {len(unexpected)}")
