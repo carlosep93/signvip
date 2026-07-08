@@ -307,7 +307,6 @@ def log_valid(
     global_step,
     out_path,
 ):
-    weight_dtype = torch.float16
     model.eval()
     condition_encoder.eval()
     condition_encoder.to(device, weight_dtype)
@@ -564,7 +563,10 @@ def main():
         )
     )
 
-    weight_dtype = torch.float16
+    weight_dtype = {
+        "fp16": torch.float16,
+        "bf16": torch.bfloat16,
+    }.get(accelerator.mixed_precision, torch.float32)
 
     num_steps_per_epoch = math.ceil(
         len(dataloader) / cfg.solver.gradient_accumulation_steps
