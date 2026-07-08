@@ -447,7 +447,7 @@ def main():
         origin_condition_encoder,
         empty_text_emb,
         noisy_scheduler,
-    ) = load_modules(cfg, device, torch.float16)
+    ) = load_modules(cfg, device, weight_dtype)
 
     vae.requires_grad_(cfg.grad.vae)
     unet.requires_grad_(cfg.grad.unet_2d)
@@ -467,7 +467,7 @@ def main():
         unet,
         appearance_encoder,
         origin_condition_encoder,
-    ).to(device, torch.float16)
+    ).to(device, weight_dtype)
 
     condition_encoder = condition_encoder.to(device, torch.float32)
 
