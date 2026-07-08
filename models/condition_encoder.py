@@ -314,7 +314,23 @@ class VQModel(nn.Module):
         else:
             if self.vq_type == "FSQ":
                 z_q, indices = self.quantizer(x)
-                embedding_loss = torch.tensor([0.0], device=x.device)
+                if self.training:
+                    # KDE repulsion: prevent encoder from collapsing all tokens to
+                    # the center code during distillation.  Returned as embedding_loss
+                    # and weighted by entropy_loss_weight in the training config.
+                    # Compute in fp32 to avoid exp() underflow under fp16.
+                    z_b = self.quantizer.bound(x.float())     # (bf, h*w, 4)
+                    z_b_flat = z_b.reshape(-1, z_b.shape[-1]) # (N, 4)
+                    n_rep = min(256, z_b_flat.shape[0])
+                    perm = torch.randperm(z_b_flat.shape[0],
+                                         device=z_b_flat.device)[:n_rep]
+                    z_sub = z_b_flat[perm]
+                    dist2 = ((z_sub.unsqueeze(1) - z_sub.unsqueeze(0)) ** 2).sum(-1)
+                    kernel = torch.exp(-dist2 / 0.5)
+                    off_diag = 1 - torch.eye(n_rep, device=z_b_flat.device)
+                    embedding_loss = (kernel * off_diag).mean()
+                else:
+                    embedding_loss = torch.tensor(0.0, device=x.device)
             else:
                 z_q, indices, embedding_loss = self.quantizer(x)
         z_q = rearrange(z_q, "b (h w) c -> b c h w", h=h, w=w)
