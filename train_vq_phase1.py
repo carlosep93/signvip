@@ -160,8 +160,24 @@ def main():
             # opposes saturation when std > 1 (pulling values back toward the
             # inner FSQ levels).
             enc_flat = enc_out.permute(0, 2, 3, 1).reshape(-1, 4).float()  # (N, 4)
-            raw_var = enc_flat.var(dim=0)              # (4,) per-channel across tokens
-            spread_loss = (raw_var - 1.0).pow(2).mean()  # target std=1 per channel
+            N_tok = enc_flat.shape[0]
+
+            # Term 1 — variance: each FSQ channel should have std ≈ 1.
+            # Prevents collapse-to-zero and prevents saturation.
+            var_loss = (enc_flat.var(dim=0) - 1.0).pow(2).mean()
+
+            # Term 2 — decorrelation: the four channels must carry independent
+            # information. Without this, the encoder satisfies the variance target
+            # by routing the same backbone signal to all four channels
+            # (e.g. ch0=ch1=ch2=ch3=f), so the code is always (L,L,L,L) — at
+            # most 5 codes on the diagonal instead of 625.
+            # This is identical to why VICReg/Barlow-Twins add a covariance term.
+            enc_c = enc_flat - enc_flat.mean(dim=0, keepdim=True)
+            cov = (enc_c.T @ enc_c) / (N_tok - 1)        # (4,4)
+            eye4 = torch.eye(4, device=enc_flat.device)
+            decorr_loss = (cov * (1 - eye4)).pow(2).mean()
+
+            spread_loss = var_loss + decorr_loss
 
             optimizer.zero_grad()
             spread_loss.backward()
@@ -178,12 +194,16 @@ def main():
                     idx = vq.encode(feat)
                     codes_used = idx.reshape(-1).unique().numel()
 
-                dim_stds = enc_flat.detach().std(dim=0).tolist()
-                avg_std = sum(dim_stds) / 4
+                with torch.no_grad():
+                    dim_stds = enc_flat.detach().std(dim=0).tolist()
+                    avg_std = sum(dim_stds) / 4
+                    enc_c_d = enc_flat.detach() - enc_flat.detach().mean(dim=0)
+                    cov_d = (enc_c_d.T @ enc_c_d) / (enc_c_d.shape[0] - 1)
+                    max_corr = (cov_d * (1 - eye4)).abs().max().item()
                 tqdm.write(
                     f"[step {step:5d}]  loss={spread_loss.item():.4f}"
-                    f"  raw_std={avg_std:.3f}"
-                    f"  per_dim=[{', '.join(f'{s:.3f}' for s in dim_stds)}]"
+                    f"  (var={var_loss.item():.4f} decorr={decorr_loss.item():.4f})"
+                    f"  raw_std={avg_std:.3f}  max_corr={max_corr:.3f}"
                     f"  codes={codes_used}/{n_e}"
                 )
 
