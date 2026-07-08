@@ -1,8 +1,8 @@
 seed: 42
 weight_dtype: bf16
 stage_init: True
-distill_loss_weight: 0.1
-entropy_loss_weight: 0.5
+distill_loss_weight: 1.0
+entropy_loss_weight: 0.0
 
 modules:
   vae: "/home/usuaris/veu/cescola/signvip/models/stable_difusion/sd-vae-ft-mse"
@@ -15,7 +15,7 @@ modules:
   condition_encoder: "./workspace/stage_1_multicond_RWTH/best/condition_encoder/model.bin"
   empty_text_emb: "/home/usuaris/veu/cescola/signvip/models/empty_text_emb.pt"
   condition_encoder_motion: "/home/usuaris/veu/cescola/signvip/workspace/stage_2_RWTH/20260706-1043/best/condition_encoder/model.bin"
-  vq_model: "workspace/vq_phase1_20260708-1014/encoder.bin" 
+  vq_model:
   mm: "/home/usuaris/veu/cescola/signvip/workspace/stage_2_RWTH/20260706-1043/best/unet/model.bin"
   unet: 
   condition_encoder_kwargs:

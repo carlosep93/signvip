@@ -1,7 +1,7 @@
 seed: 42
-weight_dtype: fp32
+weight_dtype: bf16
 stage_init: True
-distill_loss_weight: 1
+distill_loss_weight: 1.0
 entropy_loss_weight: 0.0
 
 modules:
@@ -15,7 +15,7 @@ modules:
   condition_encoder: "./workspace/stage_1_multicond_RWTH/best/condition_encoder/model.bin"
   empty_text_emb: "/home/usuaris/veu/cescola/signvip/models/empty_text_emb.pt"
   condition_encoder_motion: "/home/usuaris/veu/cescola/signvip/workspace/stage_2_RWTH/20260706-1043/best/condition_encoder/model.bin"
-  vq_model: 
+  vq_model: "workspace/vq_phase1_20260708-1014/encoder.bin"
   mm: "/home/usuaris/veu/cescola/signvip/workspace/stage_2_RWTH/20260706-1043/best/unet/model.bin"
   unet: 
   condition_encoder_kwargs:
@@ -67,7 +67,7 @@ trainable_modules:
 gradient_checkpointing: False
 
 solver:
-  max_train_steps: 5000
+  max_train_steps: 10000
   gradient_accumulation_steps: 1
   max_grad_norm: 1.0
   optimizer:
@@ -118,8 +118,8 @@ noise_scheduler_kwargs:
   clip_sample: false
 
 resume_from_checkpoint: 
-checkpointing_steps: 2500
-valid_steps: 2500
+checkpointing_steps: 5000
+valid_steps: 5000
 max_ckpt: 1
 max_model: 1
 
