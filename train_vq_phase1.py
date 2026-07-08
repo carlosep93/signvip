@@ -160,24 +160,38 @@ def main():
             # opposes saturation when std > 1 (pulling values back toward the
             # inner FSQ levels).
             enc_flat = enc_out.permute(0, 2, 3, 1).reshape(-1, 4).float()  # (N, 4)
-            N_tok = enc_flat.shape[0]
 
-            # Term 1 — variance: each FSQ channel should have std ≈ 1.
-            # Prevents collapse-to-zero and prevents saturation.
+            # --- Term 1: variance targeting on raw (pre-tanh) values ---
+            # Keeps each channel at std ≈ 1.  Operates directly on enc_flat so
+            # the gradient never vanishes through tanh at saturation.
             var_loss = (enc_flat.var(dim=0) - 1.0).pow(2).mean()
 
-            # Term 2 — decorrelation: the four channels must carry independent
-            # information. Without this, the encoder satisfies the variance target
-            # by routing the same backbone signal to all four channels
-            # (e.g. ch0=ch1=ch2=ch3=f), so the code is always (L,L,L,L) — at
-            # most 5 codes on the diagonal instead of 625.
-            # This is identical to why VICReg/Barlow-Twins add a covariance term.
-            enc_c = enc_flat - enc_flat.mean(dim=0, keepdim=True)
-            cov = (enc_c.T @ enc_c) / (N_tok - 1)        # (4,4)
-            eye4 = torch.eye(4, device=enc_flat.device)
-            decorr_loss = (cov * (1 - eye4)).pow(2).mean()
+            # --- Term 2: KDE repulsion on bounded (FSQ) values ---
+            # All previous objectives (global-var, per-dim-var, var+decorr) have
+            # degenerate solutions — e.g. a spike where 97% of tokens collapse to
+            # code 0 while a few outliers pull the variance/covariance statistics
+            # to look "healthy". Variance and correlation say nothing about HOW
+            # MANY tokens end up in each code.
+            #
+            # KDE repulsion has NO such degenerate solution: loss = average kernel
+            # density at each token position.  High when tokens cluster, minimum
+            # (zero) when tokens are spread uniformly.  The only way to reduce it
+            # is to put each token in a DIFFERENT part of the FSQ grid.
+            #
+            # We work in bounded (z_b) space so values stay in (-2.002, 2.002).
+            # Bandwidth h²=0.5 ≈ half the FSQ level spacing squared: strong
+            # repulsion for tokens in the same Voronoi cell, negligible beyond ~2
+            # level spacings.
+            z_b = vq.quantizer.bound(enc_flat)           # (N, 4)
+            n_rep = min(256, z_b.shape[0])
+            perm = torch.randperm(z_b.shape[0], device=z_b.device)[:n_rep]
+            z_sub = z_b[perm]                            # (n_rep, 4)
+            dist2 = ((z_sub.unsqueeze(1) - z_sub.unsqueeze(0)) ** 2).sum(-1)  # (n_rep, n_rep)
+            kernel = torch.exp(-dist2 / 0.5)             # bandwidth² = 0.5
+            off_diag = 1 - torch.eye(n_rep, device=z_b.device)
+            repulsion = (kernel * off_diag).mean()
 
-            spread_loss = var_loss + decorr_loss
+            spread_loss = var_loss + repulsion
 
             optimizer.zero_grad()
             spread_loss.backward()
@@ -194,16 +208,12 @@ def main():
                     idx = vq.encode(feat)
                     codes_used = idx.reshape(-1).unique().numel()
 
-                with torch.no_grad():
-                    dim_stds = enc_flat.detach().std(dim=0).tolist()
-                    avg_std = sum(dim_stds) / 4
-                    enc_c_d = enc_flat.detach() - enc_flat.detach().mean(dim=0)
-                    cov_d = (enc_c_d.T @ enc_c_d) / (enc_c_d.shape[0] - 1)
-                    max_corr = (cov_d * (1 - eye4)).abs().max().item()
+                dim_stds = enc_flat.detach().std(dim=0).tolist()
+                avg_std = sum(dim_stds) / 4
                 tqdm.write(
                     f"[step {step:5d}]  loss={spread_loss.item():.4f}"
-                    f"  (var={var_loss.item():.4f} decorr={decorr_loss.item():.4f})"
-                    f"  raw_std={avg_std:.3f}  max_corr={max_corr:.3f}"
+                    f"  (var={var_loss.item():.4f} rep={repulsion.item():.4f})"
+                    f"  raw_std={avg_std:.3f}"
                     f"  codes={codes_used}/{n_e}"
                 )
 
