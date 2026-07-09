@@ -21,6 +21,7 @@ modules:
       vq_type: FSQ
       fsq_levels: [5, 5, 5, 5]
       quantizer_channels: 4
+      skip_vq: true
       ch_mult:
         - 1
         - 2
