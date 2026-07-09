@@ -11,9 +11,8 @@ modules:
   scheduler: "/home/usuaris/veu/cescola/signvip/models/stable_difusion/stable-diffusion-v1-5/scheduler/"
   apperance_encoder: "./workspace/stage_1_multicond_RWTH/best/appearance_encoder"
   condition_encoder: "./workspace/stage_1_multicond_RWTH/best/condition_encoder/model.bin"
-  condition_encoder_motion: "./workspace/stage_2_RWTH/20260706-1043/best/condition_encoder/model.bin"
   empty_text_emb: "/home/usuaris/veu/cescola/signvip/models/empty_text_emb.pt"
-  mm: "./workspace/stage_2_RWTH/20260706-1043/best/unet/model.bin"
+  mm: "/home/usuaris/veu/cescola/signvip/models/stable_difusion/animatediff/mm_sd_v15_v2.ckpt"
   unet:
   condition_encoder_kwargs:
     use_vq: true
@@ -59,16 +58,17 @@ grad:
   condition_encoder: false
 
 trainable_modules:
+  - motion_modules.
   - vq.
 
 gradient_checkpointing: false
 solver:
-  max_train_steps: 10000
+  max_train_steps: 50000
   gradient_accumulation_steps: 1
   max_grad_norm: 1.0
   optimizer:
     use_8bit_adam: true
-    learning_rate: 1.0e-04
+    learning_rate: 1.0e-05
     adam_beta1: 0.9
     adam_beta2: 0.999
     adam_weight_decay: 1.0e-6
@@ -120,8 +120,8 @@ noise_scheduler_kwargs:
   clip_sample: false
 
 resume_from_checkpoint:
-checkpointing_steps: 2000
-valid_steps: 2000
+checkpointing_steps: 5000
+valid_steps: 5000
 max_ckpt: 1
 max_model: 1
 
