@@ -126,12 +126,15 @@ def load_modules(cfg, device, weight_dtype):
     ).to(device, weight_dtype)
     logger.info(f"Loaded appearance encoder from {modules_cfg.apperance_encoder}.")
 
+    ce_kwargs = OmegaConf.to_container(modules_cfg.condition_encoder_kwargs, resolve=True) \
+        if modules_cfg.get("condition_encoder_kwargs") else {}
     condition_encoder = VQConditionEncoder(
         conditioning_channels=3,
         image_finetune=False,
         num_conds=2,
         motion_module_type=modules_cfg.unet_additional_kwargs.motion_module_type,
         motion_module_kwargs=modules_cfg.unet_additional_kwargs.motion_module_kwargs,
+        **ce_kwargs,
     )
     if modules_cfg.condition_encoder:
         state_dict = torch.load(modules_cfg.condition_encoder)
@@ -286,6 +289,23 @@ def save_model(model, cfg, model_path, is_main_process, weight_dtype):
                 logger.info(f"save motion {list(motion_state_dict.keys())}")
                 logger.info(
                     f"Saved condition encoder motion modules to {os.path.join(model_path, 'condition_encoder')}."
+                )
+
+        # Save VQ weights if present (for stage_2_compress training)
+        if model.condition_encoder.use_vq:
+            condition_encoder_state_dict = model.condition_encoder.state_dict()
+            vq_state_dict = {
+                k: v
+                for k, v in condition_encoder_state_dict.items()
+                if k.startswith("vq.")
+            }
+            if vq_state_dict:
+                torch.save(
+                    vq_state_dict,
+                    os.path.join(model_path, "condition_encoder/vq_model.bin"),
+                )
+                logger.info(
+                    f"Saved VQ weights to {os.path.join(model_path, 'condition_encoder/vq_model.bin')}."
                 )
 
         pathlib.Path(os.path.join(model_path, "unet")).mkdir(
