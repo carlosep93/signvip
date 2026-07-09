@@ -48,6 +48,12 @@ with torch.no_grad():
         B, C, F, H, W = sk.shape
         sk = sk.permute(0, 2, 1, 3, 4).reshape(B * F, C, H, W)
         hamer = hamer.permute(0, 2, 1, 3, 4).reshape(B * F, C, H, W)
+        # raw backbone before gate
+        raw = enc.backbone(torch.cat([sk, hamer], dim=1))
+        if i == 0:
+            print(f"Backbone (pre-gate) std: {raw.std():.4f}")
+            gate_w = enc.gate_module.gate_layer(raw)
+            print(f"Gate weights mean/std: {gate_w.mean():.4f} / {gate_w.std():.4f}")
         feats = enc.encode(sk, hamer)   # (BF, 512, H', W')
         all_feats.append(feats.cpu().float())
 
