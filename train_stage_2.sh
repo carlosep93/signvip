@@ -13,8 +13,7 @@
 PYOPENGL_PLATFORM=osmesa \
     PYTHONPATH=/home/usuaris/veu/cescola/hamer:/home/usuaris/veu/cescola/signvip/scripts/sk:$PYTHONPATH \
     CUDA_VISIBLE_DEVICES=0,1 \
-    accelerate launch \
-    --config_file accelerate_config.yaml \
+    accelerate launch --config_file accelerate_config_bf16.yaml \
     --num_processes 2 --gpu_ids "0,1" \
-    train_stage2_multi_cond.py --config "configs/stage2/stage_2_RWTH.yaml"
-    
+    train_stage2_multi_cond.py \
+    --config configs/stage2/stage_2_RWTH_compress.yaml   
