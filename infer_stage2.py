@@ -88,13 +88,29 @@ def tensor_to_uint8(t):
 
 
 def save_video_mp4(frames_chw, path, fps=8):
-    """frames_chw: list of (C,H,W) tensors in [-1,1]"""
-    h, w = frames_chw[0].shape[1], frames_chw[0].shape[2]
-    writer = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
-    for f in frames_chw:
-        bgr = tensor_to_uint8(f)[:, :, ::-1]
-        writer.write(bgr)
-    writer.release()
+    """frames_chw: list of (C,H,W) tensors in [-1,1]. Uses ffmpeg for H.264 output."""
+    import subprocess, tempfile, shutil
+    tmp = tempfile.mkdtemp()
+    try:
+        for i, f in enumerate(frames_chw):
+            img = tensor_to_uint8(f)
+            Image.fromarray(img).save(os.path.join(tmp, f"{i:05d}.png"))
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-framerate", str(fps),
+                "-i", os.path.join(tmp, "%05d.png"),
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-crf", "18",
+                path,
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    finally:
+        shutil.rmtree(tmp)
 
 
 def save_comparison_grid(gt_frames, gen_frames, sk_frames, hamer_frames, path):
