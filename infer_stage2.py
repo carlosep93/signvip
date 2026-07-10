@@ -149,7 +149,8 @@ def parse_args():
     p.add_argument("--apperance_encoder", required=True, help="Appearance encoder dir")
     p.add_argument("--condition_encoder", required=True,
                    help="Condition encoder model.bin (Stage 2 full checkpoint)")
-    p.add_argument("--unet",              required=True, help="UNet model.bin")
+    p.add_argument("--unet",              default=None,
+                   help="Fine-tuned UNet model.bin (optional; omit to use SD v1.5 + mm only)")
     p.add_argument("--vq_model",          default=None,
                    help="vq_model.bin for Stage 2 compress (optional)")
     p.add_argument("--index",             type=int, default=0,
@@ -257,9 +258,11 @@ def main():
     if cfg.modules.get("mm"):
         mm_sd = load_mm_state_dict(cfg.modules.mm)
         unet.load_state_dict(mm_sd, strict=False)
-    unet_sd = torch.load(args.unet, map_location="cpu")
-    unet.load_state_dict(unet_sd, strict=False)
-    print(f"  Loaded UNet from {args.unet}")
+        print(f"  Loaded motion modules from {cfg.modules.mm}")
+    if args.unet:
+        unet_sd = torch.load(args.unet, map_location="cpu")
+        unet.load_state_dict(unet_sd, strict=False)
+        print(f"  Loaded fine-tuned UNet from {args.unet}")
 
     appearance_encoder = AppearanceEncoderModel.from_pretrained(
         args.apperance_encoder
