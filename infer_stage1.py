@@ -148,7 +148,7 @@ def main():
     # ------------------------------------------------------------------ #
     ref_pil   = read_video_frame(vid_path,   ref_idx)
     tgt_pil   = read_video_frame(vid_path,   tgt_idx)
-    sk_pil    = load_sk_frame(sk_path, tgt_idx, vid_h, vid_w)
+    sk_pil    = Image.fromarray(load_sk_frame(sk_path, tgt_idx, vid_h, vid_w))
     hamer_pil = read_video_frame(hamer_path, tgt_idx)
 
     state = torch.get_rng_state()
