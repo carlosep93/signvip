@@ -272,14 +272,15 @@ def compute_snr(noisy_scheduler, timesteps):
     return snr
 
 
-def save_model(condition_encoder, cfg, model_path, is_main_process, weight_dtype):
+def save_model(condition_encoder, cfg, model_path, is_main_process, weight_dtype, accelerator=None):
 
     if is_main_process:
         pathlib.Path(os.path.join(model_path, "condition_encoder")).mkdir(
             parents=True, exist_ok=True
         )
-        state_dict = condition_encoder.state_dict()
-        # Then extract only motion module parameters
+        # Unwrap DeepSpeed/DDP wrapper so state_dict has plain keys (no "module." prefix)
+        raw = accelerator.unwrap_model(condition_encoder) if accelerator is not None else condition_encoder
+        state_dict = raw.state_dict()
         vq_state_dict = {
             name: param for name, param in state_dict.items() if "vq" in name
         }
@@ -290,7 +291,7 @@ def save_model(condition_encoder, cfg, model_path, is_main_process, weight_dtype
         logger.info(
             f"Saved condition encoder to {os.path.join(model_path, 'condition_encoder')}."
         )
-        logger.info(f"vq_state_dict: {vq_state_dict.keys()}")
+        logger.info(f"vq_state_dict keys: {list(vq_state_dict.keys())[:4]} ...")
 
 
 @torch.no_grad()
@@ -750,6 +751,7 @@ def main():
                             model_path,
                             accelerator.is_main_process,
                             weight_dtype,
+                            accelerator,
                         )
 
             logs = {
@@ -826,6 +828,7 @@ def main():
                     model_path,
                     accelerator.is_main_process,
                     weight_dtype,
+                    accelerator,
                 )
 
     ckpt_path = os.path.join(workspace_dir, f"checkpoint-{global_step}")
@@ -833,7 +836,8 @@ def main():
 
     accelerator.save_state(ckpt_path, exclude_frozen_parameters=True)
     save_model(
-        condition_encoder, cfg, model_path, accelerator.is_main_process, weight_dtype
+        condition_encoder, cfg, model_path, accelerator.is_main_process, weight_dtype,
+        accelerator,
     )
 
     accelerator.wait_for_everyone()
