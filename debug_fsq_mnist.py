@@ -71,6 +71,7 @@ def count_codes(model, loader, n_e, accelerator):
     counts = torch.zeros(n_e, dtype=torch.long, device=accelerator.device)
 
     for x, _ in loader:
+        x = x.to(device=accelerator.device, dtype=next(raw_model.parameters()).dtype)
         indices = raw_model.encode(x)          # (B, H'*W')
         flat = indices.reshape(-1).clamp(0, n_e - 1)
         counts += torch.bincount(flat, minlength=n_e)
@@ -101,7 +102,7 @@ def save_reconstructions(model, loader, accelerator, path, n=8):
     raw_model = accelerator.unwrap_model(model)
     raw_model.eval()
     x, _ = next(iter(loader))
-    x = x[:n].to(accelerator.device)
+    x = x[:n].to(device=accelerator.device, dtype=next(raw_model.parameters()).dtype)
     with torch.no_grad():
         recon, _, _ = raw_model(x)
     fig, axes = plt.subplots(2, n, figsize=(n * 1.5, 3))
@@ -143,6 +144,10 @@ def main():
     accel  = Accelerator()
     device = accel.device
     n_e    = int(np.prod(args.fsq_levels))
+
+    # match the dtype that DeepSpeed will cast model weights to
+    mp = accel.mixed_precision
+    weight_dtype = torch.bfloat16 if mp == "bf16" else (torch.float16 if mp == "fp16" else torch.float32)
 
     if accel.is_main_process:
         os.makedirs(args.output_dir, exist_ok=True)
@@ -204,9 +209,10 @@ def main():
                     disable=not accel.is_main_process)
 
         for x, _ in pbar:
+            x = x.to(dtype=weight_dtype)
             with accel.accumulate(model):
                 recon, perplexity, emb_loss = model(x)
-                loss = F.mse_loss(recon, x.to(recon.dtype))
+                loss = F.mse_loss(recon.float(), x.float())
                 accel.backward(loss)
                 if accel.sync_gradients:
                     accel.clip_grad_norm_(model.parameters(), 1.0)
