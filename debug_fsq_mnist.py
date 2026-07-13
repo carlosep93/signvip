@@ -63,25 +63,16 @@ def parse_args():
 # --------------------------------------------------------------------------- #
 
 @torch.no_grad()
-def count_codes(model, loader, n_e, accelerator):
-    """Gather FSQ index counts across all processes."""
-    model.eval()
-    # unwrap to access VQModel.encode() directly
-    raw_model = accelerator.unwrap_model(model)
-    counts = torch.zeros(n_e, dtype=torch.long, device=accelerator.device)
-
+def count_codes_local(raw_model, loader, n_e, device, dtype):
+    """Count FSQ code usage — runs only on rank 0, uses a non-distributed loader.
+    Does NOT touch model train/eval mode to avoid interfering with DeepSpeed state."""
+    counts = torch.zeros(n_e, dtype=torch.long)
     for x, _ in loader:
-        x = x.to(device=accelerator.device, dtype=next(raw_model.parameters()).dtype)
+        x = x.to(device=device, dtype=dtype)
         indices = raw_model.encode(x)          # (B, H'*W')
-        flat = indices.reshape(-1).clamp(0, n_e - 1)
+        flat = indices.reshape(-1).cpu().clamp(0, n_e - 1)
         counts += torch.bincount(flat, minlength=n_e)
-
-    # sum counts across all processes
-    if accelerator.num_processes > 1:
-        accelerator.reduce(counts, reduction="sum")
-
-    model.train()
-    return counts.cpu()
+    return counts
 
 
 def print_analysis(counts, n_e, tag=""):
@@ -98,13 +89,12 @@ def print_analysis(counts, n_e, tag=""):
     return int(used)
 
 
-def save_reconstructions(model, loader, accelerator, path, n=8):
-    raw_model = accelerator.unwrap_model(model)
-    raw_model.eval()
+@torch.no_grad()
+def save_reconstructions(raw_model, loader, device, dtype, path, n=8):
+    """Saves input/reconstruction pairs — runs only on rank 0."""
     x, _ = next(iter(loader))
-    x = x[:n].to(device=accelerator.device, dtype=next(raw_model.parameters()).dtype)
-    with torch.no_grad():
-        recon, _, _ = raw_model(x)
+    x = x[:n].to(device=device, dtype=dtype)
+    recon, _, _ = raw_model(x)
     fig, axes = plt.subplots(2, n, figsize=(n * 1.5, 3))
     for i in range(n):
         axes[0, i].imshow(x[i, 0].float().cpu(), cmap="gray", vmin=-1, vmax=1)
@@ -116,7 +106,6 @@ def save_reconstructions(model, loader, accelerator, path, n=8):
     plt.tight_layout()
     plt.savefig(path, dpi=120)
     plt.close()
-    raw_model.train()
 
 
 def plot_code_distribution(counts, n_e, path):
@@ -170,6 +159,10 @@ def main():
                               num_workers=2, pin_memory=True, drop_last=True)
     val_loader   = DataLoader(val_ds,   batch_size=args.batch_size, shuffle=False,
                               num_workers=2, pin_memory=True)
+    # Separate non-distributed loader for rank-0-only analysis.
+    # Never passed to accel.prepare() so it doesn't participate in collective ops.
+    analysis_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False,
+                                 num_workers=2, pin_memory=True)
 
     # ------------------------------------------------------------------ #
     # model                                                               #
@@ -191,6 +184,7 @@ def main():
     model, optimizer, train_loader, val_loader = accel.prepare(
         model, optimizer, train_loader, val_loader
     )
+    raw_model = accel.unwrap_model(model)
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=args.epochs * len(train_loader)
@@ -228,30 +222,29 @@ def main():
         avg_loss = epoch_loss / len(train_loader)
         history["loss"].append(avg_loss)
 
-        if epoch % 5 == 0 or epoch == args.epochs or epoch == 1:
+        # Analysis runs only on rank 0 using the non-distributed analysis_loader.
+        # No collective ops here — avoids cross-process deadlocks with DeepSpeed.
+        if accel.is_main_process and (epoch % 5 == 0 or epoch == args.epochs or epoch == 1):
             if not args.skip_vq:
-                counts = count_codes(model, val_loader, n_e, accel)
-                if accel.is_main_process:
-                    used = print_analysis(counts, n_e,
-                                         tag=f"Epoch {epoch}  loss={avg_loss:.4f}")
-                    history["codes_used"].append((epoch, used))
-                    plot_code_distribution(
-                        counts, n_e,
-                        os.path.join(args.output_dir, f"codes_epoch{epoch:02d}.png")
-                    )
-
-            if accel.is_main_process:
-                save_reconstructions(
-                    model, val_loader, accel,
-                    os.path.join(args.output_dir, f"recon_epoch{epoch:02d}.png")
+                counts = count_codes_local(raw_model, analysis_loader, n_e, device, weight_dtype)
+                used = print_analysis(counts, n_e,
+                                      tag=f"Epoch {epoch}  loss={avg_loss:.4f}")
+                history["codes_used"].append((epoch, used))
+                plot_code_distribution(
+                    counts, n_e,
+                    os.path.join(args.output_dir, f"codes_epoch{epoch:02d}.png")
                 )
+            save_reconstructions(
+                raw_model, analysis_loader, device, weight_dtype,
+                os.path.join(args.output_dir, f"recon_epoch{epoch:02d}.png")
+            )
 
     # ------------------------------------------------------------------ #
     # final analysis & plots (main process only)                         #
     # ------------------------------------------------------------------ #
     if accel.is_main_process:
         if not args.skip_vq:
-            counts = count_codes(model, val_loader, n_e, accel)
+            counts = count_codes_local(raw_model, analysis_loader, n_e, device, weight_dtype)
             print_analysis(counts, n_e, tag="FINAL (val)")
             plot_code_distribution(
                 counts, n_e,
