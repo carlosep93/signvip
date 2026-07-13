@@ -238,6 +238,10 @@ def main():
                 raw_model, analysis_loader, device, weight_dtype,
                 os.path.join(args.output_dir, f"recon_epoch{epoch:02d}.png")
             )
+        # Barrier: rank 1 cannot start the next epoch until rank 0 finishes analysis.
+        # Without this, rank 1 races into epoch N+1 and hangs at the first all_reduce
+        # while rank 0 is still doing local analysis.
+        accel.wait_for_everyone()
 
     # ------------------------------------------------------------------ #
     # final analysis & plots (main process only)                         #
