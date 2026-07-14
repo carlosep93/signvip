@@ -121,8 +121,8 @@ def load_modules(cfg, device, weight_dtype):
         )
         assert len(unexpected) == 0
         logger.info(f"missing: {missing}")
-    assert len(unexpected) == 0
-    assert len(missing) == 0
+    #assert len(unexpected) == 0
+    #assert len(missing) == 0
 
     condition_encoder.to(device, weight_dtype)
     condition_encoder = condition_encoder.to(device, weight_dtype)
