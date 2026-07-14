@@ -62,7 +62,7 @@ trainable_modules:
   - motion_modules.
   - vq.
 
-gradient_checkpointing: false
+gradient_checkpointing: true
 solver:
   max_train_steps: 50000
   gradient_accumulation_steps: 1
