@@ -763,6 +763,23 @@ def main():
                 train_distill_loss = 0.0
                 train_perplexity = 0.0
                 train_spread_loss = 0.0
+
+                log_code_every = getattr(cfg, "log_code_every", 500)
+                if global_step % log_code_every == 0 and accelerator.is_main_process:
+                    with torch.no_grad():
+                        raw_ce = accelerator.unwrap_model(condition_encoder)
+                        idx = raw_ce.encode(
+                            tgt_sk_frames[:8].to(weight_dtype),
+                            tgt_hamer_frames[:8].to(weight_dtype),
+                            return_indices=True,
+                        )
+                        codes_used = idx.reshape(-1).unique().numel()
+                        n_e = getattr(cfg.modules.condition_encoder_kwargs.vq_kwargs, "n_e", 625)
+                        logger.info(
+                            f"[step {global_step}] codes used (batch sample): {codes_used}/{n_e}"
+                        )
+                    accelerator.wait_for_everyone()
+
                 if global_step % cfg.valid_steps == 0 and global_step > 0:
                     valid_loss = log_valid(
                         cfg,
