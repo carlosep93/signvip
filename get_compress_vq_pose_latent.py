@@ -93,7 +93,7 @@ def main():
         cfg = parse_config()
 
         accelerator = accelerate.Accelerator()
-        device = accelerator.local_process_index
+        device = accelerator.device
 
         logging.basicConfig(
             format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
@@ -114,7 +114,8 @@ def main():
                 f"Do not support weight dtype: {cfg.weight_dtype} during training!"
             )
         condition_encoder = load_modules(cfg, device, weight_dtype)[0]
-        num_compress = condition_encoder.num_compress
+        # Each frame is encoded independently — no temporal compression.
+        num_compress = getattr(condition_encoder, "num_compress", 1)
 
         dataset = SignCondDataset(
             output_dir=cfg.output_dir,
