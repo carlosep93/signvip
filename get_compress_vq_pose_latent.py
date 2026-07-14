@@ -107,6 +107,8 @@ def main():
 
         if cfg.weight_dtype == "fp16":
             weight_dtype = torch.float16
+        elif cfg.weight_dtype == "bf16":
+            weight_dtype = torch.bfloat16
         elif cfg.weight_dtype == "fp32":
             weight_dtype = torch.float32
         else:
