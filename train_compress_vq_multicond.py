@@ -638,7 +638,9 @@ def main():
     train_vq_loss = 0.0
     train_distill_loss = 0.0
     train_perplexity = 0.0
+    train_spread_loss = 0.0
     best_train_distill_loss = valid_loss
+    spread_loss_weight = getattr(cfg, "spread_loss_weight", 0.0)
     for epoch in range(start_epoch, num_epochs):
         t_data_start = time.time()
         for step, batch in enumerate(dataloader):
@@ -670,7 +672,36 @@ def main():
 
                 distill_loss = func.mse_loss(sk_cond.float(), origin_cond.float())
 
-                total_loss = cfg.distill_loss_weight * distill_loss + cfg.entropy_loss_weight * vq_loss
+                if spread_loss_weight > 0:
+                    # Keep encoder output spread (std≈1.0 per FSQ dim) during decoder
+                    # training. Without this, distillation collapses encoder variance
+                    # from std≈1.0 (Phase 1) back to std≈0.17 (natural backbone),
+                    # reducing code utilisation from 523 to ~147.
+                    raw_ce = accelerator.unwrap_model(condition_encoder)
+                    enc_pre_fsq = raw_ce.vq.downsample_encoder(
+                        origin_cond.to(weight_dtype)
+                    )  # (BF, 4, h', w')
+                    enc_flat = enc_pre_fsq.permute(0, 2, 3, 1).reshape(-1, 4).float()
+                    # Term 1: variance targeting — each FSQ dim should have std≈1.0
+                    var_loss = (enc_flat.var(dim=0) - 1.0).pow(2).mean()
+                    # Term 2: KDE repulsion — pushes tokens to spread across codes
+                    z_b = raw_ce.vq.quantizer.bound(enc_flat)
+                    n_rep = min(256, z_b.shape[0])
+                    perm = torch.randperm(z_b.shape[0], device=z_b.device)[:n_rep]
+                    z_sub = z_b[perm]
+                    dist2 = ((z_sub.unsqueeze(1) - z_sub.unsqueeze(0)) ** 2).sum(-1)
+                    kernel = torch.exp(-dist2 / 0.5)
+                    off_diag = 1 - torch.eye(n_rep, device=z_b.device)
+                    repulsion = (kernel * off_diag).mean()
+                    spread_loss = var_loss + repulsion
+                else:
+                    spread_loss = torch.tensor(0.0, device=device)
+
+                total_loss = (
+                    cfg.distill_loss_weight * distill_loss
+                    + cfg.entropy_loss_weight * vq_loss
+                    + spread_loss_weight * spread_loss
+                )
 
                 avg_loss = accelerator.gather(
                     total_loss.repeat(cfg.dataloader.batch_size)
@@ -684,6 +715,9 @@ def main():
                 avg_perplexity = accelerator.gather(
                     perplexity.repeat(cfg.dataloader.batch_size)
                 ).mean()
+                avg_spread_loss = accelerator.gather(
+                    spread_loss.detach().float().repeat(cfg.dataloader.batch_size)
+                ).mean()
                 train_loss += avg_loss.item() / cfg.solver.gradient_accumulation_steps
                 train_vq_loss += (
                     avg_vq_loss.item() / cfg.solver.gradient_accumulation_steps
@@ -693,6 +727,9 @@ def main():
                 )
                 train_perplexity += (
                     avg_perplexity.item() / cfg.solver.gradient_accumulation_steps
+                )
+                train_spread_loss += (
+                    avg_spread_loss.item() / cfg.solver.gradient_accumulation_steps
                 )
                 accelerator.backward(total_loss)
 
@@ -716,6 +753,7 @@ def main():
                         "train_vq_loss": train_vq_loss,
                         "train_distill_loss": train_distill_loss,
                         "train_perplexity": train_perplexity,
+                        "train_spread_loss": train_spread_loss,
                     },
                     step=global_step,
                 )
@@ -724,6 +762,7 @@ def main():
                 train_vq_loss = 0.0
                 train_distill_loss = 0.0
                 train_perplexity = 0.0
+                train_spread_loss = 0.0
                 if global_step % cfg.valid_steps == 0 and global_step > 0:
                     valid_loss = log_valid(
                         cfg,
