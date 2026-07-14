@@ -247,6 +247,7 @@ def main():
             os.path.basename(input_path).replace(".pkl", ".mp4"),
         )
         cap = cv2.VideoCapture(origin_path)
+        original_fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
         ref_frames = []
 
         while True:
@@ -258,7 +259,6 @@ def main():
             ref_frame = Image.fromarray(frame_rgb).resize(
                 (cfg.dataset.frame_size[1], cfg.dataset.frame_size[0])
             )
-            # ref_frame = transforms.ToTensor()(ref_frame)
             ref_frames.append(ref_frame)
             break
 
@@ -279,7 +279,7 @@ def main():
             pred_video,
             output_path,
             device=device,
-            fps=24,
+            fps=original_fps,
         )
 
 
