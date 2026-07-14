@@ -47,12 +47,32 @@ def load_encoder(cfg, checkpoint_path, device):
         use_vq=True,
         vq_kwargs=vq_kwargs,
     )
-    state_dict = torch.load(checkpoint_path, map_location="cpu")
-    # strip any "module." prefix from DDP/DeepSpeed saves
-    state_dict = {k[7:] if k.startswith("module.") else k: v for k, v in state_dict.items()}
-    missing, unexpected = encoder.load_state_dict(state_dict, strict=False)
+
+    # 1. Load Stage 1 backbone weights first (condition_blocks, gate_module, etc.)
+    #    The VQ checkpoint only contains vq.* keys; without this step the backbone
+    #    stays randomly initialised and code counts are meaningless.
+    merged = {}
+    if cfg.modules.get("condition_encoder", None):
+        backbone_sd = torch.load(cfg.modules.condition_encoder, map_location="cpu")
+        backbone_sd = {k[7:] if k.startswith("module.") else k: v
+                       for k, v in backbone_sd.items()}
+        merged.update(backbone_sd)
+    if cfg.modules.get("condition_encoder_motion", None):
+        motion_sd = torch.load(cfg.modules.condition_encoder_motion, map_location="cpu")
+        motion_sd = {k[7:] if k.startswith("module.") else k: v
+                     for k, v in motion_sd.items()}
+        merged.update(motion_sd)
+
+    # 2. Layer VQ weights on top (vq.* keys from Phase 1 encoder.bin or Phase 2 model.bin)
+    vq_sd = torch.load(checkpoint_path, map_location="cpu")
+    vq_sd = {k[7:] if k.startswith("module.") else k: v for k, v in vq_sd.items()}
+    merged.update(vq_sd)
+
+    missing, unexpected = encoder.load_state_dict(merged, strict=False)
     if unexpected:
         print(f"Unexpected keys: {unexpected}")
+    if missing:
+        print(f"Missing keys ({len(missing)}): {missing[:5]}{'...' if len(missing) > 5 else ''}")
     encoder = encoder.to(device).eval()
     return encoder
 
