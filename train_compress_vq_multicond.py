@@ -778,7 +778,6 @@ def main():
                         logger.info(
                             f"[step {global_step}] codes used (batch sample): {codes_used}/{n_e}"
                         )
-                    accelerator.wait_for_everyone()
 
                 if global_step % cfg.valid_steps == 0 and global_step > 0:
                     valid_loss = log_valid(
