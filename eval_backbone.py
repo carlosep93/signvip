@@ -67,20 +67,25 @@ warnings.filterwarnings("ignore")
 
 # ── stage detection ──────────────────────────────────────────────────────────
 
+def _cfg_get(cfg, key, default=None):
+    """Safe OmegaConf access that returns default on missing key."""
+    val = OmegaConf.select(cfg, key, default=default)
+    return val if val is not None else default
+
+
 def detect_stage(cfg, forced=None):
     """Return one of: 'pretrained', 'stage1', 'stage2', 'vq'."""
     if forced:
         return forced
-    ce_kwargs = cfg.modules.condition_encoder_kwargs
-    use_vq = ce_kwargs.get("use_vq", False)
-    skip_vq = ce_kwargs.get("vq_kwargs", {}).get("skip_vq", False)
-    has_mm = cfg.modules.get("condition_encoder_motion") or cfg.modules.get("mm")
-    has_vq_weights = bool(cfg.modules.get("vq_model"))
-    if use_vq and not skip_vq and has_vq_weights:
+    use_vq   = _cfg_get(cfg, "modules.condition_encoder_kwargs.use_vq", False)
+    skip_vq  = _cfg_get(cfg, "modules.condition_encoder_kwargs.vq_kwargs.skip_vq", False)
+    has_mm   = _cfg_get(cfg, "modules.condition_encoder_motion") or _cfg_get(cfg, "modules.mm")
+    has_vq_w = bool(_cfg_get(cfg, "modules.vq_model"))
+    if use_vq and not skip_vq and has_vq_w:
         return "vq"
-    if has_mm and cfg.modules.get("condition_encoder_motion"):
+    if has_mm and _cfg_get(cfg, "modules.condition_encoder_motion"):
         return "stage2"
-    if cfg.modules.get("condition_encoder"):
+    if _cfg_get(cfg, "modules.condition_encoder"):
         return "stage1"
     return "pretrained"
 
@@ -88,14 +93,20 @@ def detect_stage(cfg, forced=None):
 # ── model loading ────────────────────────────────────────────────────────────
 
 def load_condition_encoder(cfg, stage, device, dtype):
-    image_finetune = (stage == "stage1" or stage == "pretrained")
-    use_vq = (stage == "vq") and cfg.modules.condition_encoder_kwargs.get("use_vq", False)
-    skip_vq_in_cfg = cfg.modules.condition_encoder_kwargs.get("vq_kwargs", OmegaConf.create()).get("skip_vq", False)
+    image_finetune = stage in ("stage1", "pretrained")
 
-    ce_kwargs = OmegaConf.to_container(cfg.modules.condition_encoder_kwargs)
-    # force skip_vq for non-VQ stages even if the config has VQ fields
-    if "vq_kwargs" in ce_kwargs and stage != "vq":
-        ce_kwargs["vq_kwargs"]["skip_vq"] = True
+    # build ce_kwargs from config if present, else use defaults (no VQ)
+    raw_ce = OmegaConf.select(cfg, "modules.condition_encoder_kwargs")
+    if raw_ce is not None:
+        ce_kwargs = OmegaConf.to_container(raw_ce)
+    else:
+        ce_kwargs = {"use_vq": False}
+
+    # disable VQ for stages that don't use it
+    if stage != "vq":
+        ce_kwargs["use_vq"] = False
+        if "vq_kwargs" in ce_kwargs:
+            ce_kwargs["vq_kwargs"]["skip_vq"] = True
 
     encoder = VQConditionEncoder(
         conditioning_channels=3,
