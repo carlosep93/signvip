@@ -317,6 +317,7 @@ def infer_static(pipeline, cfg, args, condition_encoder, ref_pil, sk_frames, ham
         sk_i  = sk_frames[i:i+1].unsqueeze(0)   # (1, C, 1, H, W) — not needed for static
         hm_i  = hamer_frames[i:i+1].unsqueeze(0)
         video = pipeline(
+            prompt="",
             reference_image=ref_pil,
             sk_image=sk_frames[i],
             hamer_image=hamer_frames[i],
@@ -428,6 +429,7 @@ def main():
             vae=vae,
             denoising_unet=unet,
             scheduler=scheduler,
+            empty_text_emb=empty_text_emb,
             appearance_encoder=appearance_encoder,
             condition_encoder=condition_encoder,
         ).to(dtype=dtype, device=device)
